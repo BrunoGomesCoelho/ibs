@@ -1,54 +1,78 @@
 import os
+import logging
+from collections import OrderedDict
+
+import urlextract
 from dotenv import load_dotenv
 from telethon import TelegramClient, events, sync
-import urlextract
+
+
+async def auto_push(message, sender, extractor, bs_peer_username):
+    if extractor.has_urls(message.text):
+        logging.debug(f"{sender.username} sent a link")
+        if sender.username == bs_peer_username:
+            queue_curr[message.id] = message
+        else:
+            queue_peer[message.id] = message
+
+
+async def auto_pop(message, sender, bs_peer_username):
+    reply_msg = await message.get_reply_message()
+    reply_id = reply_msg.id
+    if sender.username == bs_peer_username and reply_id in queue_peer:
+        msg = queue_peer.pop(reply_id)
+        logging.debug("Popping from reply msg {msg}")
+    if sender.username != bs_peer_username and reply_id in queue_curr:
+        msg = queue_curr.pop(reply_id)
+        logging.debug("Popping from reply msg {msg}")
 
 
 if __name__ == "__main__":
     # Load confs
     load_dotenv(override=True, verbose=True)
-
     api_id = int(os.getenv("API_ID"))
     api_hash = os.getenv("API_HASH")
     session_name = os.getenv("SESSION_NAME")
-    bs_peer = os.getenv("BS_PEER")
+    bs_peer_username = os.getenv("BS_PEER")
+    debug = bool(int(os.getenv("DEBUG")))
 
-    print("Using", api_id, api_hash)
-    print("Session name", session_name)
-    print("BS peer is", bs_peer)
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    logging.info(f"Using, {api_id}, {api_hash}")
+    logging.info(f"Session name, {session_name}")
+    logging.info(f"BS peer is, {bs_peer_username}")
+
+    queue_peer = OrderedDict()
+    queue_curr = OrderedDict()
+    extractor = urlextract.URLExtract()
 
     with TelegramClient(session_name, api_id, api_hash) as client:
-        client.send_message(bs_peer, 'International BS online!')
-        extractor = urlextract.URLExtract()
-        queue_peer = set()
-        queue_curr = set()
+        bs_peer_id = client.get_peer_id(bs_peer_username)
+        client.send_message(bs_peer_username , 'International BS online!')
 
-        # TODO: contains URL (auto push)
-        @client.on(events.NewMessage())
-        async def auto_push(event):
-            print("Received", event.message.text)
-
+        @client.on(events.NewMessage(chats=[bs_peer_id]))
+        async def auto_push_pop(event):
+            sender = await event.message.get_sender()
+            if event.message.is_reply:
+                await auto_pop(event.message, sender, bs_peer_username)
             if extractor.has_urls(event.message.text):
-                print("Yo! You sent a link")
-                sender = await event.message.get_sender()
-                if sender.username == bs_peer:
-                    queue_curr.add(event.message.id)
-                else:
-                    queue_peer.add(event.message.id)
-            print("Queue current user:", queue_curr)
-            print("Queue peer user:", queue_peer)
+                await auto_push(event.message, sender, extractor, bs_peer_username)
 
-        # TODO: replied to pushed (auto pop)
-        # @client.on(events.NewMessage(pattern='(?i).*Hello'))
-        # async def handler(event):
-        #     await event.reply('Hey!')
+            logging.debug(f"Queue current user:, {queue_curr}")
+            logging.debug(f"Queue peer user:, {queue_peer}")
 
-        # TODO: contains pop (manual pop)
-        # @client.on(events.NewMessage(pattern='(?i).*Hello'))
-        # async def handler(event):
-        #     await event.reply('Hey!')
+        @client.on(events.NewMessage(pattern='(?i)\/pop$'))
+        async def manual_pop(event):
+            sender = await event.message.get_sender()
+            msg = None
+            queue = queue_peer if sender.username == bs_peer_username else queue_curr
+            if queue:
+                _, msg = queue.popitem(last=False)
+                await msg.reply("Popping this")
+            else:
+                await event.reply("No bullshit")
 
         client.run_until_disconnected()
-
-    # messages = client.get_messages('cruzao')
-    # messages[0].download_media()
