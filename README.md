@@ -1,22 +1,45 @@
-# IBS - International BullShit
+# International BullShit
 
-IBS is a Telegram "bot" to help any two friends manage all the ~~research~~ YouTube links they send each other.
-
-It works by automatically adding any link you send to the other person's list; They can then pop that specific video from the list by replying to the original message, or pop the oldest not yet watched video with the command ```/pop```.
-
+Telegram link management "bot" inside DM chats
 
 ## Getting Started
 
-Due to how Telegram Bots are limited in non group chats, it is implemented as a constantly running program that uses the users API keys to manage the messages. For setting up valid credentials, view the relevant [telethon docs](https://docs.telethon.dev/en/latest/basic/signing-in.html) and then setup your own .env file, following the example of ```sample_dotenv```. The settings you need to change are API_ID, API_HASH and BS_PEER, this last one being the nickname of the friend you would like to to (ie, @myName).
+First of all you'll need a [Telegram API token](https://docs.telethon.dev/en/latest/basic/signing-in.html). Once you have that, create a file names `.env` following the example on [`sample_dotenv`](https://github.com/BrunoGomesCoelho/ibs/blob/master/sample_dotenv):
 
-**WARNING**: Your telegram api should not be used for spamming or harassement and a invalid use might permanently ban your account.
+```
+API_ID=????
+API_HASH=????????????????????????????????
+SESSION_NAME=session_name
+TITLE=InternationalBullShit
+BS_PEER=????
+DEBUG=0
+```
 
-After that, run ```python3 -m pip install -r requirements.txt``` to install all the libraries and ```python3 main.py``` to run. The first time you use the program, you might need to confirm a code on your phone.
+Replace the `?`s with your information. `BS_PEER` is the Telegram nickname of the person you wish to use `ibs` with (without the leading *@*). If you'd like to see debugging logs, set `DEBUG` to `1` instead of `0`.
+
+After that, install the requirement libraries
+```sh
+$ python3 -m pip install -r requirements.txt
+``` 
+And run the bot 
+```sh
+$ python3 main.py
+``` 
+
+The first time you use the program, you might need to confirm a code on your phone.
+
+**WARNING**: The Telegram API should not be used for spamming or harassement. Doing so could permanently ban your account.
+
+## How it works
+
+Telegram Bots cannot be added to private chats (i.e. direact messages). `ibs`, however, acts like a daemon that uses your Telegram API key to manage your messages with your `BS_PEER`. 
+
+Any link you send to the other person gets added to their queue. Any link the person sends you gets added to your queue. Both of you can then pop that a specific video from the queue by replying to the original message, or pop the oldest not yet watched video with `/pop`.
 
 ## Contributing
 
-Feel free to open a issue and contribute with the code.
+Feel free to open an issue if you found a bug or would like to request a feature.
 
 ## Authors
 
-Originally coded by @[BrunoGomesCoelho](https://github.com/BrunoGomesCoelho) and @[GMelodie](https://github.com/gmelodie) in a coffee filled afternon.
+Originally coded by @[BrunoGomesCoelho](https://github.com/BrunoGomesCoelho) and @[gmelodie](https://github.com/gmelodie) in a coffee-filled afternoon.
