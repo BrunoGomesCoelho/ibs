@@ -1,12 +1,15 @@
 import os
+import json
 import logging
+from pathlib import Path
+import pickle
 from collections import OrderedDict
 
 import urlextract
 from dotenv import load_dotenv
-from telethon import TelegramClient, events, sync
+from telethon.sync import TelegramClient
+from telethon import events
 
-# repop
 
 async def auto_push(message, sender, extractor, bs_peer_username):
     if extractor.has_urls(message.text):
@@ -18,7 +21,7 @@ async def auto_push(message, sender, extractor, bs_peer_username):
 
 
 async def auto_pop(message, sender, bs_peer_username):
-    if message.text.startswith("/ignore"):
+    if message.text.startswith("/ignore") or message.text.startswith("/repop"):
         logging.debug("Ignoring pop of {msg}")
         return
 
@@ -30,6 +33,20 @@ async def auto_pop(message, sender, bs_peer_username):
     if sender.username != bs_peer_username and older_id in queue_curr:
         msg = queue_curr.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
+
+
+def save_queue(filename, queue):
+    with open(filename, 'wb') as f:
+        pickle.dump(queue, f)
+
+
+def init_queue(filename):
+    queue = OrderedDict()
+    if Path(filename).is_file():
+        with open(filename, 'rb') as f:
+            queue = pickle.load(f)
+    return queue
+
 
 
 if __name__ == "__main__":
@@ -50,17 +67,14 @@ if __name__ == "__main__":
     logging.info(f"Session name, {session_name}")
     logging.info(f"BS peer is, {bs_peer_username}")
 
-    queue_peer = OrderedDict()
-    queue_curr = OrderedDict()
+    queue_peer = init_queue("peer.json")
+    queue_curr = init_queue("curr.json")
     extractor = urlextract.URLExtract()
 
     with TelegramClient(session_name, api_id, api_hash) as client:
         bs_peer_id = client.get_peer_id(bs_peer_username)
         client.send_message(bs_peer_username , 'International BS online!')
 
-        """
-        /ignore
-        """
         @client.on(events.NewMessage(chats=[bs_peer_id]))
         async def auto_push_pop(event):
             sender = await event.message.get_sender()
@@ -72,6 +86,10 @@ if __name__ == "__main__":
             logging.debug(f"Queue current user:, {queue_curr}")
             logging.debug(f"Queue peer user:, {queue_peer}")
 
+            save_queue("peer.json", queue_peer)
+            save_queue("curr.json", queue_curr)
+
+
         @client.on(events.NewMessage(pattern='(?i)\/pop$'))
         async def manual_pop(event):
             sender = await event.message.get_sender()
@@ -79,9 +97,13 @@ if __name__ == "__main__":
             queue = queue_peer if sender.username == bs_peer_username else queue_curr
             if queue:
                 _, msg = queue.popitem(last=False)
-                await msg.reply("Popping this")
+                msg.reply("Popping this")
             else:
-                await event.reply("No bullshit")
+                event.reply("No bullshit")
+
+            print(type(list(queue_peer.values())[0]))
+            save_queue("peer.json", queue_peer)
+            save_queue("curr.json", queue_curr)
 
         client.run_until_disconnected()
 
