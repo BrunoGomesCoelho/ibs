@@ -6,6 +6,7 @@ import urlextract
 from dotenv import load_dotenv
 from telethon import TelegramClient, events, sync
 
+# repop
 
 async def auto_push(message, sender, extractor, bs_peer_username):
     if extractor.has_urls(message.text):
@@ -17,13 +18,17 @@ async def auto_push(message, sender, extractor, bs_peer_username):
 
 
 async def auto_pop(message, sender, bs_peer_username):
-    reply_msg = await message.get_reply_message()
-    reply_id = reply_msg.id
-    if sender.username == bs_peer_username and reply_id in queue_peer:
-        msg = queue_peer.pop(reply_id)
+    if message.text.startswith("/ignore"):
+        logging.debug("Ignoring pop of {msg}")
+        return
+
+    older_msg = await message.get_reply_message()
+    older_id = older_msg.id
+    if sender.username == bs_peer_username and older_id in queue_peer:
+        msg = queue_peer.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
-    if sender.username != bs_peer_username and reply_id in queue_curr:
-        msg = queue_curr.pop(reply_id)
+    if sender.username != bs_peer_username and older_id in queue_curr:
+        msg = queue_curr.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
 
 
@@ -53,6 +58,9 @@ if __name__ == "__main__":
         bs_peer_id = client.get_peer_id(bs_peer_username)
         client.send_message(bs_peer_username , 'International BS online!')
 
+        """
+        /ignore
+        """
         @client.on(events.NewMessage(chats=[bs_peer_id]))
         async def auto_push_pop(event):
             sender = await event.message.get_sender()
@@ -76,3 +84,4 @@ if __name__ == "__main__":
                 await event.reply("No bullshit")
 
         client.run_until_disconnected()
+
