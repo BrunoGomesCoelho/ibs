@@ -9,13 +9,36 @@ from dotenv import load_dotenv
 from telethon import TelegramClient, events, sync
 
 
+backup = {
+    "curr": [],
+    "peer": [],
+}
+
+
+def write_backup():
+    """TODO: document
+    """
+    with open("backup.json", "w") as f:
+        json.dump(backup, f)
+
+
 async def auto_push(message, sender, extractor, bs_peer_username):
-    if extractor.has_urls(message.text):
-        logging.debug(f"{sender.username} sent a link")
-        if sender.username == bs_peer_username:
-            queue_curr[message.id] = message
-        else:
-            queue_peer[message.id] = message
+    if not extractor.has_urls(message.text):
+        return
+
+    urls = extractor.find_urls(message.text)
+    logging.debug(f"{sender.username} sent a link")
+
+    if sender.username == bs_peer_username:
+        backup["curr"] += urls
+        queue_curr[message.id] = message
+    else:
+        backup["peer"] += urls
+        queue_peer[message.id] = message
+
+    # newline
+
+    write_backup()  # readibility 100
 
 
 async def auto_pop(message, sender, bs_peer_username):
@@ -31,15 +54,6 @@ async def auto_pop(message, sender, bs_peer_username):
     if sender.username != bs_peer_username and older_id in queue_curr:
         msg = queue_curr.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
-
-
-def init_queue(filename):
-    queue = OrderedDict()
-    if Path(filename).is_file():
-        with open(filename) as f:
-            queue = json.load(f, object_pairs_hook=OrderedDict)
-    return queue
-
 
 
 if __name__ == "__main__":
@@ -60,8 +74,8 @@ if __name__ == "__main__":
     logging.info(f"Session name, {session_name}")
     logging.info(f"BS peer is, {bs_peer_username}")
 
-    queue_peer = init_queue("peer.json")
-    queue_curr = init_queue("curr.json")
+    queue_peer = OrderedDict()
+    queue_curr = OrderedDict()
     extractor = urlextract.URLExtract()
 
     with TelegramClient(session_name, api_id, api_hash) as client:
@@ -79,8 +93,6 @@ if __name__ == "__main__":
             logging.debug(f"Queue current user:, {queue_curr}")
             logging.debug(f"Queue peer user:, {queue_peer}")
 
-            # save(queues)
-
         @client.on(events.NewMessage(pattern='(?i)\/pop$'))
         async def manual_pop(event):
             sender = await event.message.get_sender()
@@ -90,9 +102,10 @@ if __name__ == "__main__":
                 _, msg = queue.popitem(last=False)
                 await msg.reply("Popping this")
             else:
+                backup_key = "peer" if sender.username == bs_peer_username else "curr"
+                backup[backup_key] = []
+                write_backup()  # writes backup, function is called
                 await event.reply("No bullshit")
-
-            # save(queues)
 
         client.run_until_disconnected()
 
