@@ -4,7 +4,7 @@ Telegram link management "bot" inside DM chats
 
 ## Getting Started
 
-First of all you'll need a [Telegram API token](https://docs.telethon.dev/en/latest/basic/signing-in.html). Once you have that, create a file names `.env` following the example on [`sample_dotenv`](https://github.com/BrunoGomesCoelho/ibs/blob/master/sample_dotenv):
+First of all you'll need a [Telegram API token](https://docs.telethon.dev/en/latest/basic/signing-in.html). Once you have that, create a file named `.env` following the example on [`sample_dotenv`](https://github.com/BrunoGomesCoelho/ibs/blob/master/sample_dotenv):
 
 ```
 API_ID=????
