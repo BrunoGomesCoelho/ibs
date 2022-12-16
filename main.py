@@ -74,6 +74,11 @@ if __name__ == "__main__":
     logging.info(f"Session name, {session_name}")
     logging.info(f"BS peer is, {bs_peer_username}")
 
+    if os.path.isfile("backup.json"):
+        logging.info(f"backup found, loading")
+        with open("backup.json", "r") as f:
+            backup = json.load(f)
+
     queue_peer = OrderedDict()
     queue_curr = OrderedDict()
     extractor = urlextract.URLExtract()
