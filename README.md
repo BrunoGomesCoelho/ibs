@@ -12,7 +12,9 @@ API_HASH=????????????????????????????????
 SESSION_NAME=session_name
 TITLE=InternationalBullShit
 BS_PEER=????
+MY_USERNAME=????
 DEBUG=0
+
 ```
 
 Replace the `?`s with your information. `BS_PEER` is the Telegram nickname of the person you wish to use `ibs` with (without the leading *@*). If you'd like to see debugging logs, set `DEBUG` to `1` instead of `0`.
@@ -26,7 +28,7 @@ And run the bot
 $ python3 main.py
 ``` 
 
-The first time you use the program, you might need to confirm a code on your phone.
+The first time you use the program, you might need to confirm a code on your phone. After that, a `.session` file will be created and it'll no longer ask for your phone/code. So if you're running the docker container, run it outside the container once to get the .session file.
 
 **WARNING**: The Telegram API should not be used for spamming or harassement. Doing so could permanently ban your account.
 

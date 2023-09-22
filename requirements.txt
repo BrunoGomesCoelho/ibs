@@ -1,3 +1,4 @@
-telethon
+pyrogram
+tgcrypto
 python-dotenv
 urlextract

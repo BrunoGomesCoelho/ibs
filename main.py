@@ -3,16 +3,54 @@ import json
 import logging
 from pathlib import Path
 from collections import OrderedDict
+import asyncio
 
 import urlextract
 from dotenv import load_dotenv
-from telethon import TelegramClient, events, sync
+from pyrogram import Client, idle, filters
+
+
+# Load confs
+load_dotenv(override=True, verbose=True)
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+SESSION_NAME = os.getenv("SESSION_NAME")
+BS_PEER_USERNAME = os.getenv("BS_PEER")
+MY_USERNAME = os.getenv("MY_USERNAME")
+DEBUG = bool(int(os.getenv("DEBUG")))
+# enable logs
+if DEBUG:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
+
+logging.info(f"Using, {API_ID}, {API_HASH}")
+logging.info(f"Session name, {SESSION_NAME}")
+logging.info(f"BS peer is, {BS_PEER_USERNAME}")
+logging.info(f"Your telegram username is: {MY_USERNAME}")
+
+# get data from backup if exists
+if os.path.isfile("backup.json"):
+    logging.info(f"backup found, loading")
+    with open("backup.json", "r") as f:
+        backup = json.load(f)
+
+queue_peer = OrderedDict()
+queue_curr = OrderedDict()
+extractor = urlextract.URLExtract()
+
+# Pattern to match the command /pop
+POP_MSG_FILTER   = filters.regex(r'(?i)\/pop$')
+PEER_USER_FILTER = filters.user(BS_PEER_USERNAME)
+MY_USER_FILTER   = filters.user(MY_USERNAME)
 
 
 backup = {
     "curr": [],
     "peer": [],
 }
+
+client = Client(MY_USERNAME, API_ID, API_HASH)
 
 
 def write_backup():
@@ -22,14 +60,14 @@ def write_backup():
         json.dump(backup, f)
 
 
-async def auto_push(message, sender, extractor, bs_peer_username):
+async def auto_push(message, sender, extractor):
     if not extractor.has_urls(message.text):
         return
 
     urls = extractor.find_urls(message.text)
     logging.debug(f"{sender.username} sent a link")
 
-    if sender.username == bs_peer_username:
+    if sender.username == BS_PEER_USERNAME:
         backup["curr"] += urls
         queue_curr[message.id] = message
     else:
@@ -41,76 +79,56 @@ async def auto_push(message, sender, extractor, bs_peer_username):
     write_backup()  # readibility 100
 
 
-async def auto_pop(message, sender, bs_peer_username):
+async def auto_pop(message, sender):
     if message.text.startswith("/ignore") or message.text.startswith("/repop"):
         logging.debug("Ignoring pop of {msg}")
         return
 
-    older_msg = await message.get_reply_message()
+    older_msg = message.reply_to_message
     older_id = older_msg.id
-    if sender.username == bs_peer_username and older_id in queue_peer:
+    if sender.username == BS_PEER_USERNAME and older_id in queue_peer:
         msg = queue_peer.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
-    if sender.username != bs_peer_username and older_id in queue_curr:
+    if sender.username != BS_PEER_USERNAME and older_id in queue_curr:
         msg = queue_curr.pop(older_id)
         logging.debug("Popping from reply msg {msg}")
 
 
-if __name__ == "__main__":
-    # Load confs
-    load_dotenv(override=True, verbose=True)
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
-    session_name = os.getenv("SESSION_NAME")
-    bs_peer_username = os.getenv("BS_PEER")
-    debug = bool(int(os.getenv("DEBUG")))
-
-    if debug:
-        logging.basicConfig(level=logging.DEBUG)
+# TODO: change to chat filter
+@client.on_message((PEER_USER_FILTER | MY_USER_FILTER) & POP_MSG_FILTER)
+async def manual_pop(client, message):
+    sender = message.from_user
+    logging.debug(f"Received pop from {sender.username}")
+    msg = None
+    queue = queue_peer if sender.username == BS_PEER_USERNAME else queue_curr
+    if queue:
+        _, msg = queue.popitem(last=False)
+        await msg.reply_text("Popping this", quote=True)
     else:
-        logging.basicConfig(level=logging.INFO)
+        backup_key = "peer" if sender.username == BS_PEER_USERNAME else "curr"
+        backup[backup_key] = []
+        write_backup()  # writes backup, function is called
+        await message.reply_text("No bullshit", quote=True)
 
-    logging.info(f"Using, {api_id}, {api_hash}")
-    logging.info(f"Session name, {session_name}")
-    logging.info(f"BS peer is, {bs_peer_username}")
 
-    if os.path.isfile("backup.json"):
-        logging.info(f"backup found, loading")
-        with open("backup.json", "r") as f:
-            backup = json.load(f)
+# TODO: change to chat filter
+@client.on_message(PEER_USER_FILTER | MY_USER_FILTER)
+async def auto_push_pop(client, message):
+    sender = message.from_user
+    if message.reply_to_message:
+        await auto_pop(message, sender)
+    if extractor.has_urls(message.text):
+        await auto_push(message, sender, extractor)
 
-    queue_peer = OrderedDict()
-    queue_curr = OrderedDict()
-    extractor = urlextract.URLExtract()
+    logging.debug(f"Queue current user:, {queue_curr}")
+    logging.debug(f"Queue peer user:, {queue_peer}")
 
-    with TelegramClient(session_name, api_id, api_hash) as client:
-        bs_peer_id = client.get_peer_id(bs_peer_username)
-        client.send_message(bs_peer_username , 'International BS online!')
 
-        @client.on(events.NewMessage(chats=[bs_peer_id]))
-        async def auto_push_pop(event):
-            sender = await event.message.get_sender()
-            if event.message.is_reply:
-                await auto_pop(event.message, sender, bs_peer_username)
-            if extractor.has_urls(event.message.text):
-                await auto_push(event.message, sender, extractor, bs_peer_username)
 
-            logging.debug(f"Queue current user:, {queue_curr}")
-            logging.debug(f"Queue peer user:, {queue_peer}")
+async def main():
+    await client.start()
+    await client.send_message(BS_PEER_USERNAME , 'International BS 2.0 online!')
+    await idle()
+    await client.stop()
 
-        @client.on(events.NewMessage(pattern='(?i)\/pop$'))
-        async def manual_pop(event):
-            sender = await event.message.get_sender()
-            msg = None
-            queue = queue_peer if sender.username == bs_peer_username else queue_curr
-            if queue:
-                _, msg = queue.popitem(last=False)
-                await msg.reply("Popping this")
-            else:
-                backup_key = "peer" if sender.username == bs_peer_username else "curr"
-                backup[backup_key] = []
-                write_backup()  # writes backup, function is called
-                await event.reply("No bullshit")
-
-        client.run_until_disconnected()
-
+client.run(main())
